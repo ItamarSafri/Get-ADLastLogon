@@ -18,10 +18,6 @@ Function Get-ADLastLogon {
     .PARAMETER SearchBase
         Specifies the search base for the query. Use this parameter when retrieving objects within a specific organizational unit (OU).
 
-    .PARAMETER DCou
-        Specifies the distinguished name (DN) of the Organizational Unit (OU) containing Domain Controllers.
-        Default value is "OU=Domain Controllers,DC=domain,DC=local".
-
     .PARAMETER Filter
         Specifies an optional filter for the query.
 
@@ -38,75 +34,96 @@ Function Get-ADLastLogon {
         Author         : Itamar Safri
 
 #>
-        param (
-            [Parameter(Mandatory=$true)]
-            [ValidateSet("User","Computer")]
-            [string]$ObjectType, 
-            [Parameter(Position=1,Mandatory=$false, ParameterSetName='Object')]
-            [string]$ObjectName,
-            [Parameter(Position=1,Mandatory=$false, ParameterSetName='OU')]
-            [string]$SearchBase,
-            [Parameter(Mandatory=$false)]
-            [String]$Filter,
-            [Parameter(Mandatory=$false)]
-            [int]$Throttle = 5
-        )
-        $WarningPreference = "SilentlyContinue"
-    
-        if ($ObjectType -eq "User"){
-            $global:command = "Get-ADUser"
-        }elseif($ObjectType -eq "Computer"){
-            $global:command = "Get-ADComputer"
-        }else{
-        }
-        if ($SearchBase){
-            $global:command += " -SearchBase `"$($SearchBase)`""
-        }elseif($ObjectName){
-            $global:command += " -Identity `"$($ObjectName)`""
-        }
-        if ($Filter){
-            $global:command += " -Filter {$Filter}"
-        }elseif($SearchBase){
-            $global:command += " -Filter *"
-        }
-    
-    
-        $global:command += ' -Server {} -Properties lastlogon, lastlogondate, WhenCreated -ErrorAction Stop'
-        $DCou = "OU=Domain Controllers,DC=domain,DC=local"
+    param (
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("User","Computer")]
+        [string]$ObjectType, 
+        [Parameter(Position=1,Mandatory=$false, ParameterSetName='Object')]
+        [string]$ObjectName,
+        [Parameter(Position=1,Mandatory=$false, ParameterSetName='OU')]
+        [string]$SearchBase,
+        [Parameter(Mandatory=$false)]
+        [String]$Filter,
+        [Parameter(Mandatory=$false)]
+        [int]$Throttle = 5
+    )
 
-        $DCs = Get-ADComputer -SearchBase $DCou -Filter *
-    
-        $all = $DCs.Name | Invoke-Parallel -ImportVariables -ImportModules -Throttle $Throttle -WarningAction SilentlyContinue {
-            $tempCMD = $global:command.Replace("{}", $_)
-            $scriptBlock = [ScriptBlock]::Create($tempCMD)
-            Write-verbose "Running Command: $tempCMD"
-            try{
-                Invoke-Command $scriptBlock
-            }catch{
-                Write-Host "Failed to Query DC - $($_). Will try again in 10 seconds .."
-                Write-Host "Error: $($Error[0])"
-                Sleep -Seconds 10
-                Invoke-Command $scriptBlock -ErrorAction Stop
-            }
+    $WarningPreference = "SilentlyContinue"
+
+    # Check if the Active Directory module is available
+    try{
+        Import-Module ActiveDirectory -ErrorAction Stop
+    }catch{
+        throw "Can't find AD Module. Please install it first"
+    }
+
+    try{
+        Import-Module Invoke-Parallel -ErrorAction Stop
+    }catch{
+        throw "Error: Can't find Invoke-Parallel Module. Please install it first"
+    }
+
+    if ($ObjectType -eq "User"){
+        $global:command = "Get-ADUser"
+    } elseif ($ObjectType -eq "Computer"){
+        $global:command = "Get-ADComputer"
+    }
+
+    if ($SearchBase){
+        $global:command += " -SearchBase `"$($SearchBase)`""
+    } elseif ($ObjectName){
+        $global:command += " -Identity `"$($ObjectName)`""
+    }
+
+    if ($Filter){
+        $global:command += " -Filter {$Filter}"
+    } elseif ($SearchBase){
+        $global:command += " -Filter *"
+    }
+
+    $global:command += ' -Server {} -Properties lastlogon, lastlogondate, WhenCreated -ErrorAction Stop'
+    $DC = Get-ADDomainController
+    $DCou = $DC.ComputerObjectDN.Replace("CN=$($DC.Name),", "")
+    $DCs = Get-ADComputer -SearchBase $DCou -Filter *
+
+    $all = $DCs.Name | Invoke-Parallel -ImportVariables -ImportModules -Throttle $Throttle -WarningAction SilentlyContinue {
+        $tempCMD = $global:command.Replace("{}", $_)
+        Write-Verbose "Running Command: $tempCMD"
+        $scriptBlock = [ScriptBlock]::Create($tempCMD)
+        try {
+            $result = Invoke-Command $scriptBlock -ErrorAction Stop
+            Write-Verbose "Successfully retrieved data from $_"
+            $result
+        } catch {
+            Write-Warning "Failed to query DC $_. Will try again in 10 seconds."
+            Write-Warning "Error: $($_.Exception.Message)"
+            Sleep -Seconds 10
+            Invoke-Command $scriptBlock -ErrorAction Stop
         }
-    
-        $groups = $all | Group SamAccountName
-    
-        $groups | Invoke-Parallel -ImportModules -ImportVariables -WarningAction SilentlyContinue -ErrorAction Ignore {
-            $group = $_
-            $times = @()
-            foreach ($obj in $group.Group){
-                if ($obj.lastlogon -ne $null){
-                    $times += [datetime]::FromFileTime($obj.lastlogon)
-                }else{
-                    Write-Verbose "$($obj.Name) - no lastlogon"
-                }
-            }
-            $adlastlogon = $times | Sort -Descending | Select -First 1
-            if ($adlastlogon){
-                $group.Group | ? {$_.LastLogon -eq $adlastlogon.ToFileTime()} | Select * , @{N="RealLastLogonDate";E={[datetime]::FromFileTime($_.lastlogon)}} -ExcludeProperty PropertyNames, AddedProperties, RemovedProperties, ModifiedProperties, PropertyCount
-            }else{
+    }
+
+    $groups = $all | Group-Object SamAccountName
+
+    $groups | Invoke-Parallel -ImportModules -ImportVariables -WarningAction SilentlyContinue -ErrorAction Ignore {
+        $group = $_
+        $times = @()
+
+        foreach ($obj in $group.Group){
+            if ($obj.lastlogon -ne $null){
+                $times += [datetime]::FromFileTime($obj.lastlogon)
+            } else {
                 Write-Verbose "$($obj.Name) - no lastlogon"
             }
         }
+
+        $adlastlogon = $times | Sort-Object -Descending | Select-Object -First 1
+        if ($adlastlogon){
+            $group.Group | Where-Object { $_.LastLogon -eq $adlastlogon.ToFileTime() } | 
+                Select-Object * , @{N="RealLastLogonDate";E={[datetime]::FromFileTime($_.lastlogon)}} -ExcludeProperty PropertyNames, AddedProperties, RemovedProperties, ModifiedProperties, PropertyCount
+        } else {
+            Write-Verbose "$($obj.Name) - no lastlogon"
+        }
     }
+}
+
+Get-ADLastLogon -ObjectType User -ObjectName ItamarSa
