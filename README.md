@@ -15,11 +15,11 @@ To address the challenge, the script leverages the Last-Logon attribute for its 
 
 ### Usage
 #### Parameters
-* ObjectType: Specifies the type of objects to retrieve last logon information for. Valid values are "User" or "Computer".
-* ObjectName: Specifies the name of the specific object to retrieve last logon information for. Use this parameter in conjunction with ObjectType "User" or "Computer".
-* SearchBase: Specifies the search base for the query. Use this parameter when retrieving objects within a specific organizational unit (OU).
-* Filter: Specifies an optional filter for the query.
-* Throttle: Specifies the maximum number of concurrent queries to Domain Controllers. Default value is 5.
+* **ObjectType**: Specifies the type of objects to retrieve last logon information for. Valid values are "User" or "Computer".
+* **ObjectName**: Specifies the name of the specific object to retrieve last logon information for. Use this parameter in conjunction with ObjectType "User" or "Computer".
+* **SearchBase**: Specifies the search base for the query. Use this parameter when retrieving objects within a specific organizational unit (OU).
+* **Filter**: Specifies an optional filter for the query.
+* **Throttle**: Specifies the maximum number of concurrent queries to Domain Controllers. Default value is 5.
 
 ### Examples
 ```
