@@ -5,10 +5,10 @@ The Get-ADLastLogon PowerShell script is designed to retrieve the last logon inf
 
 ### The Challenge
 #### LastLogon Attribute
-The Last-Logon attribute contains a Windows FileTime representation of the last time a domain controller successfully authenticated the user. However, it is stored per domain controller, making it challenging to obtain accurate, real-time last logon information.
+LastLogon in Active Directory marks when a user last logged in, but it's stored per domain controller, making real-time accuracy challenging. It captures precise logon moments, whether interactive, network-based, or from other realms, and a zero value indicates a user who has never logged in.
 
 #### LastLogonTimestamp Attribute
-The Last-Logon-Timestamp attribute is a replicated attribute introduced with Microsoft Windows Server 2003. Unlike Last-Logon, Last-Logon-Timestamp is synced to every domain controller, providing a more consistent view of user logon times. However, caution is advised as it may not always reflect the most recent logon due to specific replication intervals.
+The LastLogonTimestamp attribute is a replicated attribute introduced with Microsoft Windows Server 2003. Unlike Last-Logon, Last-Logon-Timestamp is synced to every domain controller, providing a more consistent view of user logon times. However, caution is advised as it may not always reflect the most recent logon due to specific replication intervals.
 
 ### The Solution
 To address the challenge, the script leverages the Last-Logon attribute for its accuracy and retrieves this information from each domain controller. By querying each domain controller and determining the latest Last-Logon timestamp, the script provides a more accurate representation of the user's last logon in a multi-DC domain.
