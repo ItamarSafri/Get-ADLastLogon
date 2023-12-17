@@ -125,5 +125,3 @@ Function Get-ADLastLogon {
         }
     }
 }
-
-Get-ADLastLogon -ObjectType User -ObjectName ItamarSa
