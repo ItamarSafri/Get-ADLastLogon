@@ -29,3 +29,6 @@ Get-ADLastLogon -ObjectType User -SearchBase "OU=test,DC=domain,DC=local" -Filte
 # Example 2: Retrieve accurate last logon information for computer objects containing the text "Backup" in the name
 Get-ADLastLogon -ObjectType Computer -SearchBase "OU=Computers,DC=domain,DC=local" -Filter {Name -like "*Backup*"}
 ```
+
+Thanks to RamblingCookieMonster for the Invoke-Parallel Module:
+https://github.com/RamblingCookieMonster/Invoke-Parallel
